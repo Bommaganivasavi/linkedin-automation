@@ -1,0 +1,72 @@
+package main
+
+import (
+	"fmt"
+	"log"
+	"os"
+	"time"
+
+	"github.com/joho/godotenv"
+	"github.com/sirupsen/logrus"
+)
+
+var logger = logrus.New()
+
+func main() {
+	// Setup logging
+	logger.SetFormatter(&logrus.TextFormatter{
+		FullTimestamp: true,
+	})
+	logger.SetLevel(logrus.InfoLevel)
+
+	// Load environment variables
+	if err := godotenv.Load(); err != nil {
+		logger.Warn("No .env file found, using system environment variables")
+	}
+
+	logger.Info("Starting LinkedIn Automation Bot...")
+	logger.Warn("⚠️  This tool is for EDUCATIONAL PURPOSES ONLY")
+	logger.Warn("⚠️  Using this on real accounts violates LinkedIn ToS")
+
+	// Get credentials
+	email := os.Getenv("LINKEDIN_EMAIL")
+	password := os.Getenv("LINKEDIN_PASSWORD")
+
+	if email == "" || password == "" {
+		logger.Fatal("LINKEDIN_EMAIL and LINKEDIN_PASSWORD must be set in .env file")
+	}
+
+	// Initialize bot
+	bot, err := NewLinkedInBot(email, password)
+	if err != nil {
+		logger.Fatalf("Failed to initialize bot: %v", err)
+	}
+	defer bot.Close()
+
+	// Login
+	logger.Info("Attempting to login...")
+	if err := bot.Login(); err != nil {
+		logger.Fatalf("Login failed: %v", err)
+	}
+	logger.Info("✓ Login successful!")
+
+	// Wait a bit before continuing
+	time.Sleep(3 * time.Second)
+
+	// Example: Search for people
+	logger.Info("Searching for Software Engineers...")
+	profiles, err := bot.SearchPeople("Software Engineer", "San Francisco", 10)
+	if err != nil {
+		logger.Errorf("Search failed: %v", err)
+	} else {
+		logger.Infof("Found %d profiles", len(profiles))
+		for i, profile := range profiles {
+			fmt.Printf("%d. %s\n", i+1, profile)
+		}
+	}
+
+	logger.Info("Bot execution completed. Press Ctrl+C to exit.")
+	
+	// Keep browser open for demonstration
+	select {}
+}

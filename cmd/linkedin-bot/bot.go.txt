@@ -1,0 +1,263 @@
+package main
+
+import (
+	"fmt"
+	"math/rand"
+	"time"
+
+	"github.com/go-rod/rod"
+	"github.com/go-rod/rod/lib/launcher"
+	"github.com/go-rod/stealth"
+	"github.com/sirupsen/logrus"
+)
+
+type LinkedInBot struct {
+	browser  *rod.Browser
+	page     *rod.Page
+	email    string
+	password string
+	logger   *logrus.Logger
+	rand     *rand.Rand
+}
+
+func NewLinkedInBot(email, password string) (*LinkedInBot, error) {
+	// Create logger
+	logger := logrus.New()
+	logger.SetFormatter(&logrus.TextFormatter{FullTimestamp: true})
+
+	// Launch browser with anti-detection
+	path, _ := launcher.LookPath()
+	u := launcher.New().
+		Bin(path).
+		Headless(false). // Set to true to hide browser
+		Set("disable-blink-features", "AutomationControlled").
+		Delete("enable-automation").
+		Set("disable-web-security").
+		MustLaunch()
+
+	browser := rod.New().ControlURL(u).MustConnect()
+
+	// Create page with stealth mode
+	page := stealth.MustPage(browser)
+
+	// Set realistic viewport
+	page.MustSetViewport(1920, 1080, 1, false)
+
+	// Create random seed
+	source := rand.NewSource(time.Now().UnixNano())
+	rng := rand.New(source)
+
+	bot := &LinkedInBot{
+		browser:  browser,
+		page:     page,
+		email:    email,
+		password: password,
+		logger:   logger,
+		rand:     rng,
+	}
+
+	return bot, nil
+}
+
+func (b *LinkedInBot) Close() {
+	b.logger.Info("Closing browser...")
+	if b.browser != nil {
+		b.browser.MustClose()
+	}
+}
+
+// Random delay between actions (simulates human thinking time)
+func (b *LinkedInBot) randomDelay(minSeconds, maxSeconds int) {
+	delay := minSeconds + b.rand.Intn(maxSeconds-minSeconds+1)
+	b.logger.Debugf("Waiting %d seconds...", delay)
+	time.Sleep(time.Duration(delay) * time.Second)
+}
+
+// Human-like typing
+func (b *LinkedInBot) humanType(element *rod.Element, text string) error {
+	for _, char := range text {
+		// Random delay between keystrokes (50-150ms)
+		delay := 50 + b.rand.Intn(100)
+		time.Sleep(time.Duration(delay) * time.Millisecond)
+		
+		// Small chance of typo (5%)
+		if b.rand.Float32() < 0.05 {
+			// Type wrong character
+			wrongChar := rune(97 + b.rand.Intn(26)) // random a-z
+			element.MustInput(string(wrongChar))
+			time.Sleep(time.Duration(100+b.rand.Intn(200)) * time.Millisecond)
+			// Backspace
+			element.MustType(string(rune(8)))
+			time.Sleep(time.Duration(50+b.rand.Intn(100)) * time.Millisecond)
+		}
+		
+		element.MustInput(string(char))
+	}
+	return nil
+}
+
+// Smooth scroll with random patterns
+func (b *LinkedInBot) humanScroll() {
+	// Random scroll distance
+	distance := 200 + b.rand.Intn(400)
+	
+	// Scroll in small increments for smoothness
+	steps := 10 + b.rand.Intn(10)
+	stepSize := distance / steps
+	
+	for i := 0; i < steps; i++ {
+		b.page.Mouse.MustScroll(0, float64(stepSize))
+		time.Sleep(time.Duration(20+b.rand.Intn(30)) * time.Millisecond)
+	}
+	
+	// Sometimes scroll back a bit (human behavior)
+	if b.rand.Float32() < 0.3 {
+		time.Sleep(time.Duration(200+b.rand.Intn(300)) * time.Millisecond)
+		b.page.Mouse.MustScroll(0, float64(-50-b.rand.Intn(100)))
+	}
+}
+
+// Move mouse in Bezier curve pattern (human-like movement)
+func (b *LinkedInBot) moveMouseToElement(element *rod.Element) error {
+	box, err := element.Shape()
+	if err != nil {
+		return err
+	}
+	
+	// Calculate target position (center of element)
+	targetX := box.Box().CenterX()
+	targetY := box.Box().CenterY()
+	
+	// Get current mouse position (approximate)
+	currentX := float64(b.rand.Intn(1920))
+	currentY := float64(b.rand.Intn(1080))
+	
+	// Move in curved path with multiple steps
+	steps := 15 + b.rand.Intn(10)
+	
+	for i := 0; i <= steps; i++ {
+		t := float64(i) / float64(steps)
+		
+		// Bezier curve calculation (adds natural curve to movement)
+		// Control points for curve
+		cp1X := currentX + (targetX-currentX)*0.25 + float64(b.rand.Intn(200)-100)
+		cp1Y := currentY + (targetY-currentY)*0.25 + float64(b.rand.Intn(200)-100)
+		
+		// Calculate position along curve
+		x := (1-t)*(1-t)*currentX + 2*(1-t)*t*cp1X + t*t*targetX
+		y := (1-t)*(1-t)*currentY + 2*(1-t)*t*cp1Y + t*t*targetY
+		
+		b.page.Mouse.MustMove(x, y)
+		time.Sleep(time.Duration(5+b.rand.Intn(10)) * time.Millisecond)
+	}
+	
+	// Small overshoot and correction (natural human behavior)
+	overshootX := targetX + float64(b.rand.Intn(20)-10)
+	overshootY := targetY + float64(b.rand.Intn(20)-10)
+	b.page.Mouse.MustMove(overshootX, overshootY)
+	time.Sleep(time.Duration(50+b.rand.Intn(50)) * time.Millisecond)
+	b.page.Mouse.MustMove(targetX, targetY)
+	
+	return nil
+}
+
+func (b *LinkedInBot) Login() error {
+	b.logger.Info("Navigating to LinkedIn...")
+	b.page.MustNavigate("https://www.linkedin.com/login")
+	b.page.MustWaitLoad()
+	b.randomDelay(2, 4)
+
+	// Find email field
+	b.logger.Info("Entering credentials...")
+	emailField := b.page.MustElement("#username")
+	b.moveMouseToElement(emailField)
+	emailField.MustClick()
+	b.randomDelay(1, 2)
+	b.humanType(emailField, b.email)
+
+	b.randomDelay(1, 2)
+
+	// Find password field
+	passwordField := b.page.MustElement("#password")
+	b.moveMouseToElement(passwordField)
+	passwordField.MustClick()
+	b.randomDelay(1, 2)
+	b.humanType(passwordField, b.password)
+
+	b.randomDelay(1, 3)
+
+	// Click login button
+	b.logger.Info("Clicking login button...")
+	loginBtn := b.page.MustElement("button[type='submit']")
+	b.moveMouseToElement(loginBtn)
+	loginBtn.MustClick()
+
+	// Wait for navigation
+	time.Sleep(5 * time.Second)
+
+	// Check if login was successful
+	currentURL := b.page.MustInfo().URL
+	if contains(currentURL, "/feed") || contains(currentURL, "/in/") {
+		return nil
+	}
+
+	// Check for verification/captcha
+	if contains(currentURL, "/checkpoint") || contains(currentURL, "/challenge") {
+		return fmt.Errorf("security checkpoint detected - manual intervention required")
+	}
+
+	return fmt.Errorf("login may have failed, current URL: %s", currentURL)
+}
+
+func (b *LinkedInBot) SearchPeople(jobTitle, location string, maxResults int) ([]string, error) {
+	b.logger.Infof("Searching for: %s in %s", jobTitle, location)
+	
+	// Navigate to people search
+	searchURL := fmt.Sprintf("https://www.linkedin.com/search/results/people/?keywords=%s&origin=GLOBAL_SEARCH_HEADER", jobTitle)
+	b.page.MustNavigate(searchURL)
+	b.page.MustWaitLoad()
+	b.randomDelay(3, 5)
+
+	// Scroll to load more results
+	for i := 0; i < 3; i++ {
+		b.humanScroll()
+		b.randomDelay(2, 4)
+	}
+
+	// Collect profile links
+	profiles := []string{}
+	
+	elements := b.page.MustElements("a.app-aware-link")
+	for i, el := range elements {
+		if i >= maxResults {
+			break
+		}
+		
+		href, err := el.Property("href")
+		if err != nil {
+			continue
+		}
+		
+		url := href.String()
+		if contains(url, "/in/") && !contains(url, "/search/") {
+			profiles = append(profiles, url)
+		}
+	}
+
+	return profiles, nil
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && 
+		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || 
+		findInString(s, substr)))
+}
+
+func findInString(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}

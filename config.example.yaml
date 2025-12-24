@@ -1,0 +1,31 @@
+# LinkedIn Bot Configuration Example
+
+# Automation settings
+automation:
+  daily_connection_limit: 30   # Maximum connection requests per day
+  daily_message_limit: 50      # Maximum messages to send per day
+  connection_note_max_length: 300  # Maximum length for connection notes
+
+# Timing settings (in seconds unless otherwise specified)
+timing:
+  min_delay_seconds: 2         # Minimum delay between actions
+  max_delay_seconds: 5         # Maximum delay between actions
+  typing_speed_min_ms: 50      # Minimum typing speed (milliseconds per character)
+  typing_speed_max_ms: 150     # Maximum typing speed (milliseconds per character)
+  page_load_timeout: 30        # Maximum time to wait for page load
+  navigation_timeout: 60       # Maximum time to wait for navigation
+
+# Stealth settings to make the bot appear more human-like
+stealth:
+  random_scrolling: true      # Enable random scrolling on pages
+  human_typing: true          # Simulate human-like typing with occasional typos
+  mouse_movement: true        # Simulate human-like mouse movements
+  business_hours_only: true   # Only operate during business hours (9 AM - 5 PM, Mon-Fri)
+
+# Browser configuration
+browser:
+  headless: false             # Run browser in headless mode (no UI)
+  user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+  viewport:
+    width: 1920
+    height: 1080

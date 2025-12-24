@@ -1,0 +1,133 @@
+package storage
+
+import (
+	"database/sql"
+	"fmt"
+	"time"
+
+	_ "github.com/mattn/go-sqlite3"
+)
+
+type Storage struct {
+	db *sql.DB
+}
+
+type ConnectionRequest struct {
+	ID          int
+	ProfileURL  string
+	ProfileName string
+	SentAt      time.Time
+	Accepted    bool
+	Note        string
+}
+
+type Message struct {
+	ID           int
+	ProfileURL   string
+	MessageText  string
+	SentAt       time.Time
+}
+
+func NewStorage(dbPath string) (*Storage, error) {
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open database: %w", err)
+	}
+
+	storage := &Storage{db: db}
+	
+	if err := storage.initTables(); err != nil {
+		return nil, err
+	}
+
+	return storage, nil
+}
+
+func (s *Storage) initTables() error {
+	queries := []string{
+		`CREATE TABLE IF NOT EXISTS connection_requests (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			profile_url TEXT UNIQUE NOT NULL,
+			profile_name TEXT,
+			sent_at DATETIME NOT NULL,
+			accepted BOOLEAN DEFAULT 0,
+			note TEXT
+		)`,
+		`CREATE TABLE IF NOT EXISTS messages (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			profile_url TEXT NOT NULL,
+			message_text TEXT NOT NULL,
+			sent_at DATETIME NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_connection_sent_at ON connection_requests(sent_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_message_sent_at ON messages(sent_at)`,
+	}
+
+	for _, query := range queries {
+		if _, err := s.db.Exec(query); err != nil {
+			return fmt.Errorf("failed to create tables: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (s *Storage) SaveConnectionRequest(profileURL, profileName, note string) error {
+	query := `INSERT INTO connection_requests (profile_url, profile_name, sent_at, note)
+	          VALUES (?, ?, ?, ?)`
+	
+	_, err := s.db.Exec(query, profileURL, profileName, time.Now(), note)
+	if err != nil {
+		return fmt.Errorf("failed to save connection request: %w", err)
+	}
+	
+	return nil
+}
+
+func (s *Storage) HasSentConnectionRequest(profileURL string) (bool, error) {
+	query := `SELECT COUNT(*) FROM connection_requests WHERE profile_url = ?`
+	
+	var count int
+	err := s.db.QueryRow(query, profileURL).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	
+	return count > 0, nil
+}
+
+func (s *Storage) GetTodayConnectionCount() (int, error) {
+	today := time.Now().Format("2006-01-02")
+	query := `SELECT COUNT(*) FROM connection_requests 
+	          WHERE DATE(sent_at) = ?`
+	
+	var count int
+	err := s.db.QueryRow(query, today).Scan(&count)
+	return count, err
+}
+
+func (s *Storage) SaveMessage(profileURL, messageText string) error {
+	query := `INSERT INTO messages (profile_url, message_text, sent_at)
+	          VALUES (?, ?, ?)`
+	
+	_, err := s.db.Exec(query, profileURL, messageText, time.Now())
+	if err != nil {
+		return fmt.Errorf("failed to save message: %w", err)
+	}
+	
+	return nil
+}
+
+func (s *Storage) GetTodayMessageCount() (int, error) {
+	today := time.Now().Format("2006-01-02")
+	query := `SELECT COUNT(*) FROM messages 
+	          WHERE DATE(sent_at) = ?`
+	
+	var count int
+	err := s.db.QueryRow(query, today).Scan(&count)
+	return count, err
+}
+
+func (s *Storage) Close() error {
+	return s.db.Close()
+}

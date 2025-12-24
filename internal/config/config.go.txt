@@ -1,0 +1,93 @@
+package config
+
+import (
+	"fmt"
+	"os"
+
+	"gopkg.in/yaml.v3"
+)
+
+type Config struct {
+	Automation AutomationConfig `yaml:"automation"`
+	Timing     TimingConfig     `yaml:"timing"`
+	Stealth    StealthConfig    `yaml:"stealth"`
+	Browser    BrowserConfig    `yaml:"browser"`
+}
+
+type AutomationConfig struct {
+	DailyConnectionLimit    int `yaml:"daily_connection_limit"`
+	DailyMessageLimit       int `yaml:"daily_message_limit"`
+	ConnectionNoteMaxLength int `yaml:"connection_note_max_length"`
+}
+
+type TimingConfig struct {
+	MinDelaySeconds int `yaml:"min_delay_seconds"`
+	MaxDelaySeconds int `yaml:"max_delay_seconds"`
+	TypingSpeedMinMs int `yaml:"typing_speed_min_ms"`
+	TypingSpeedMaxMs int `yaml:"typing_speed_max_ms"`
+}
+
+type StealthConfig struct {
+	RandomScrolling    bool `yaml:"random_scrolling"`
+	HumanTyping        bool `yaml:"human_typing"`
+	MouseMovement      bool `yaml:"mouse_movement"`
+	BusinessHoursOnly  bool `yaml:"business_hours_only"`
+}
+
+type BrowserConfig struct {
+	Headless  bool   `yaml:"headless"`
+	UserAgent string `yaml:"user_agent"`
+}
+
+func LoadConfig(path string) (*Config, error) {
+	// Set defaults
+	cfg := &Config{
+		Automation: AutomationConfig{
+			DailyConnectionLimit:    50,
+			DailyMessageLimit:       30,
+			ConnectionNoteMaxLength: 300,
+		},
+		Timing: TimingConfig{
+			MinDelaySeconds: 2,
+			MaxDelaySeconds: 5,
+			TypingSpeedMinMs: 50,
+			TypingSpeedMaxMs: 150,
+		},
+		Stealth: StealthConfig{
+			RandomScrolling:   true,
+			HumanTyping:       true,
+			MouseMovement:     true,
+			BusinessHoursOnly: false,
+		},
+		Browser: BrowserConfig{
+			Headless:  false,
+			UserAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+		},
+	}
+
+	// Read config file
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return cfg, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	// Parse YAML
+	if err := yaml.Unmarshal(data, cfg); err != nil {
+		return cfg, fmt.Errorf("failed to parse config: %w", err)
+	}
+
+	return cfg, nil
+}
+
+func (c *Config) Validate() error {
+	if c.Automation.DailyConnectionLimit <= 0 {
+		return fmt.Errorf("daily_connection_limit must be positive")
+	}
+	if c.Timing.MinDelaySeconds < 0 {
+		return fmt.Errorf("min_delay_seconds cannot be negative")
+	}
+	if c.Timing.MaxDelaySeconds < c.Timing.MinDelaySeconds {
+		return fmt.Errorf("max_delay_seconds must be >= min_delay_seconds")
+	}
+	return nil
+}
